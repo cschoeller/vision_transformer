@@ -52,9 +52,14 @@ class Attention(nn.Module):
 
 class TransformerEncoder(nn.Module):
 
-    def __init__(self, dim, heads, dimheads, mlp_hdim):
-        ...
+    def __init__(self, dim, heads, dimheads, mlp_dim):
+        ... #TODO
 
+
+class VisionTransformer(nn.Module):
+
+    def __init__(self, image_size, patch_size, num_classes, dim, heads, dimheads, mlp_hdim):
+        ... #TODO
 
 
 x = torch.rand(3, 5, 8) # b, n, dims
