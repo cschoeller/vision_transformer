@@ -47,8 +47,8 @@ class BicubicUpsampling():
 
 def load_dataset(path):
     # normalization taken from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
-    upsample = BicubicUpsampling(128)
-    crop_size = 100
+    upsample = BicubicUpsampling(112)
+    crop_size = 96
     center_crop = transforms.CenterCrop(crop_size)
     rand_crop = transforms.RandomCrop(size=crop_size)
     hflip = transforms.RandomHorizontalFlip(p=0.5)
@@ -144,7 +144,7 @@ def main():
     prepare_val_folder(dataset_path)
     train, val = load_dataset(dataset_path)
 
-    model = VisionTransformer(img_size=128, patch_size=16, num_classes=200)
+    model = VisionTransformer(img_size=96, patch_size=16, num_classes=200)
     #model = SimpleCNN()
     #model = ResNet()
     #model = models.resnet18(num_classes=200)
