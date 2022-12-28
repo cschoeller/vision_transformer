@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 
+from vision_transformer import VisionTransformer
 from resnet import ResNet
 from simple_cnn import SimpleCNN
 
@@ -42,14 +43,16 @@ class BicubicUpsampling():
 def load_dataset(path):
     # normalization taken from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
     upsample = BicubicUpsampling(128)
-    crop_size = 100
-    center_crop = transforms.CenterCrop(crop_size)
-    rand_crop = transforms.RandomCrop(size=crop_size)
-    hflip = transforms.RandomHorizontalFlip(p=0.5)
+    #crop_size = 100
+    #center_crop = transforms.CenterCrop(crop_size)
+    #rand_crop = transforms.RandomCrop(size=crop_size)
+    #hflip = transforms.RandomHorizontalFlip(p=0.5)
     to_tensor = transforms.ToTensor()
-    normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    trfs_train = transforms.Compose([upsample, rand_crop, hflip, to_tensor, normalize])
-    trfs_val = transforms.Compose([upsample, center_crop, to_tensor, normalize])
+    #normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    #trfs_train = transforms.Compose([upsample, rand_crop, hflip, to_tensor, normalize])
+    #trfs_val = transforms.Compose([upsample, center_crop, to_tensor, normalize])
+    trfs_train = transforms.Compose([upsample, to_tensor])
+    trfs_val = transforms.Compose([upsample, to_tensor])
     train = ImageFolder(os.path.join(path, 'train'), transform=trfs_train)
     val = ImageFolder(os.path.join(path, 'val'), transform=trfs_val)
     return train, val
@@ -57,7 +60,7 @@ def load_dataset(path):
 def train_model(model, train_data):
     epochs = 50
     model.cuda()
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=0.0003)
     cross_entropy_loss = nn.CrossEntropyLoss()
     data_loader = data.DataLoader(train_data, batch_size=96, shuffle=True, num_workers=12)
     for epoch in range(epochs):
@@ -105,8 +108,9 @@ def prepare_val_folder(dataset_path):
 def main():
     dataset_path = "./tiny-imagenet-200"
     prepare_val_folder(dataset_path)
+    model = VisionTransformer(img_size=128, patch_size=16, num_classes=200)
     #model = SimpleCNN()
-    model = ResNet()
+    # model = ResNet()
     #model = models.resnet18(num_classes=200)
     #model = models.resnet18(pretrained=True)
     #model.fc = nn.Linear(model.fc.in_features, 200)
