@@ -137,7 +137,7 @@ def prepare_val_folder(dataset_path):
         os.rmdir(img_dir)
 
 def main():
-    experiment = Experiment(experiment_name='vit')
+    experiment = Experiment(experiment_name='vit', exclude_dirs=['tiny-imagenet-200'])
     experiment.add_directory('models')
 
     dataset_path = "./tiny-imagenet-200"
