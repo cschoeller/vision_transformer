@@ -4,26 +4,22 @@ import PIL
 import matplotlib.pyplot as plt
 from torchvision.datasets import ImageFolder
 from torchvision import transforms
-import torchvision.models as models
+#import torchvision.models as models
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 
-from vision_transformer import VisionTransformer
-from resnet import ResNet
-from simple_cnn import SimpleCNN
-
 from pycandle.training.model_trainer import ModelTrainer
 from pycandle.general.experiment import Experiment
 from pycandle.training.callbacks import HistoryRecorder, ModelCheckpoint
 
+from vision_transformer import VisionTransformer
 
-# def save_model(model, checkpoint_path):
-#     model.eval()
-#     model_state_dict = model.state_dict()
-#     torch.save({'model_state_dict' : model_state_dict,
-#                 }, checkpoint_path)
+
+def load_model(model, checkpoint_path):
+    loaded_state_dict = torch.load(checkpoint_path)['model_state_dict']
+    model.load_state_dict(loaded_state_dict)
 
 def count_correct_preds(y_pred, y_true):
     pred_indices = y_pred.max(1, keepdim=True)[1]    
@@ -39,56 +35,32 @@ def evaluate(model, val_data):
         cnt_correct += count_correct_preds(y_pred, y)
     return cnt_correct/len(val_data)
 
+def accuracy_metric(y_pred, y_true):
+    return float(count_correct_preds(y_pred, y_true)/len(y_true))
+
 class BicubicUpsampling():
     def __init__(self, size):
         self.size = size
     def __call__(self, img):
-        return img.resize((self.size, self.size), PIL.Image.BICUBIC)
+        return img.resize((self.size, self.size), PIL.Image.Resampling.BICUBIC)
 
 def load_dataset(path):
-    # normalization taken from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
-    upsample = BicubicUpsampling(112)
-    crop_size = 96
-    center_crop = transforms.CenterCrop(crop_size)
-    rand_crop = transforms.RandomCrop(size=crop_size)
+    # normalization from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
+    img_size = 64
+    upsample_train = BicubicUpsampling(80)
+    upsample_val = BicubicUpsampling(img_size)
+    rand_rot = transforms.RandomRotation(degrees=(-75, 75))
+    rand_crop = transforms.RandomCrop(size=img_size)
     hflip = transforms.RandomHorizontalFlip(p=0.5)
     to_tensor = transforms.ToTensor()
     normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    trfs_train = transforms.Compose([upsample, rand_crop, hflip, to_tensor, normalize])
-    trfs_val = transforms.Compose([upsample, center_crop, to_tensor, normalize])
+    trfs_train = transforms.Compose([upsample_train, rand_rot, rand_crop, hflip, to_tensor, normalize])
+    trfs_val = transforms.Compose([upsample_val, to_tensor, normalize])
     train = ImageFolder(os.path.join(path, 'train'), transform=trfs_train)
     val = ImageFolder(os.path.join(path, 'val'), transform=trfs_val)
     return train, val
 
-# def train_model(model, train_data):
-#     epochs = 50
-#     model.cuda()
-#     optimizer = optim.Adam(model.parameters(), lr=0.0003)
-#     cross_entropy_loss = nn.CrossEntropyLoss()
-#     data_loader = data.DataLoader(train_data, batch_size=96, shuffle=True, num_workers=12)
-#     for epoch in range(epochs):
-#         running_loss = 0
-#         for i, batch in enumerate(data_loader):
-#             x, y = batch[0].cuda(), batch[1].cuda()
-#             y_pred = model(x)
-#             error = cross_entropy_loss(y_pred, y)
-#             # training step
-#             running_loss += error.item()
-#             optimizer.zero_grad() # reset gradient
-#             error.backward() # compute new gradient
-#             optimizer.step() # grad descent step
-#             print(f"epoch {epoch+1}, batch {i+1}/{len(data_loader)}, loss {running_loss/(i+1)}")
-
 def plot_history(history_recorder, experiment):#, testset_name=None):
-    # create directory
-    # if testset_name != None:
-    #     output_folder = os.path.join(experiment.plots, testset_name)
-    # else:
-    output_folder = experiment.plots
-
-    # if not os.path.exists(output_folder):
-    #     os.makedirs(output_folder)
-
     for key in history_recorder.history.keys():
         if 'lr' in key:
             continue
@@ -104,7 +76,7 @@ def plot_history(history_recorder, experiment):#, testset_name=None):
         plt.xlabel('Epoch')
         if val_key in history_recorder.history:
             plt.legend(['train', 'validation'], loc='upper right')
-        plt.savefig(os.path.join(output_folder, '{}.png'.format(key)))
+        plt.savefig(os.path.join(experiment.plots, '{}.png'.format(key)))
         plt.close()
 
 def prepare_val_folder(dataset_path):
@@ -137,37 +109,34 @@ def prepare_val_folder(dataset_path):
         os.rmdir(img_dir)
 
 def main():
-    experiment = Experiment(experiment_name='vit', exclude_dirs=['tiny-imagenet-200'])
+    experiment = Experiment(experiment_name='test')
     experiment.add_directory('models')
 
     dataset_path = "./tiny-imagenet-200"
     prepare_val_folder(dataset_path)
     train, val = load_dataset(dataset_path)
 
-    model = VisionTransformer(img_size=96, patch_size=16, num_classes=200)
-    #model = SimpleCNN()
-    #model = ResNet()
-    #model = models.resnet18(num_classes=200)
-    #model = models.resnet18(pretrained=True)
-    #model.fc = nn.Linear(model.fc.in_features, 200)
+    model = VisionTransformer(img_size=64, patch_size=8, num_classes=200, dim=256, depth=12, heads=12, mlp_dim=256, num_convs=0)
     model.cuda()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0003)
+    optimizer = optim.Adam(model.parameters(), lr=0.0003, weight_decay=0.0001)
     loss = nn.CrossEntropyLoss()
-    epochs = 100
-    train_loader = data.DataLoader(train, batch_size=96, shuffle=True, num_workers=12)
-    val_loader = data.DataLoader(val, batch_size=96, shuffle=True, num_workers=12)
-    trainer = ModelTrainer(model, optimizer, loss, epochs, train_loader, val_loader, device=0)
+    epochs = 30
+    train_loader = data.DataLoader(train, batch_size=64, shuffle=True, num_workers=12)
+    val_loader = data.DataLoader(val, batch_size=64, shuffle=True, num_workers=12)
+    trainer = ModelTrainer(model, optimizer, loss, epochs, train_loader, val_loader, device=0, scheduler=None)
     history_recorder = HistoryRecorder()
     trainer.add_callback(history_recorder)
     trainer.add_callback(ModelCheckpoint(experiment.models))
+    trainer.add_metric(accuracy_metric)
     trainer.start_training()
     plot_history(history_recorder, experiment)
-    
-    #train_model(model, train)
-    #save_model(model, 'model.pt')
+
+    checkpoint_path = experiment.models + '/model_checkpoint.pt'
+    load_model(model, checkpoint_path)
+    model.eval()
     accuracy = evaluate(model, val)
-    print(f"Classification accuracy {accuracy}")
+    print(f"Best validation model accuracy: {accuracy}")
 
 if __name__ == "__main__":
     main()
