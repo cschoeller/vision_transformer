@@ -46,16 +46,21 @@ class BicubicUpsampling():
 
 def load_dataset(path):
     # normalization from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
+    # define augmentations
     img_size = 64
     upsample_train = BicubicUpsampling(80)
     upsample_val = BicubicUpsampling(img_size)
-    rand_rot = transforms.RandomRotation(degrees=(-75, 75))
+    rand_aug = transforms.RandAugment(magnitude=9)
+    rand_rot = transforms.RandomRotation(degrees=(-25, 25))
     rand_crop = transforms.RandomCrop(size=img_size)
     hflip = transforms.RandomHorizontalFlip(p=0.5)
     to_tensor = transforms.ToTensor()
     normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    trfs_train = transforms.Compose([upsample_train, rand_rot, rand_crop, hflip, to_tensor, normalize])
+    rand_erase = transforms.RandomErasing(p=0.2, scale=(0.02, 0.2))
+    # compose transformation
+    trfs_train = transforms.Compose([upsample_train, rand_rot, rand_crop, hflip, rand_aug, to_tensor, normalize, rand_erase])
     trfs_val = transforms.Compose([upsample_val, to_tensor, normalize])
+    # load images with transformation function
     train = ImageFolder(os.path.join(path, 'train'), transform=trfs_train)
     val = ImageFolder(os.path.join(path, 'val'), transform=trfs_val)
     return train, val
@@ -109,21 +114,22 @@ def prepare_val_folder(dataset_path):
         os.rmdir(img_dir)
 
 def main():
-    experiment = Experiment(experiment_name='test')
+    experiment = Experiment(experiment_name='vit')
     experiment.add_directory('models')
 
     dataset_path = "./tiny-imagenet-200"
     prepare_val_folder(dataset_path)
     train, val = load_dataset(dataset_path)
 
-    model = VisionTransformer(img_size=64, patch_size=8, num_classes=200, dim=256, depth=12, heads=12, mlp_dim=256, num_convs=0)
+    model = VisionTransformer(img_size=64, patch_size=8, num_classes=200, dim=512, depth=12, heads=12, mlp_dim=512)
     model.cuda()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0003, weight_decay=0.0001)
-    loss = nn.CrossEntropyLoss()
-    epochs = 30
-    train_loader = data.DataLoader(train, batch_size=64, shuffle=True, num_workers=12)
-    val_loader = data.DataLoader(val, batch_size=64, shuffle=True, num_workers=12)
+    optimizer = optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0.0001)
+    loss = nn.CrossEntropyLoss(label_smoothing=0.1)
+    epochs = 100
+    train_loader = data.DataLoader(train, batch_size=128, shuffle=True, num_workers=12)
+
+    val_loader = data.DataLoader(val, batch_size=128, shuffle=True, num_workers=12)
     trainer = ModelTrainer(model, optimizer, loss, epochs, train_loader, val_loader, device=0, scheduler=None)
     history_recorder = HistoryRecorder()
     trainer.add_callback(history_recorder)
