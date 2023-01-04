@@ -47,16 +47,17 @@ class BicubicUpsampling():
 def load_dataset(path):
     # normalization from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
     # define augmentations
+    #TODO: Add MixUp or CutMix
     img_size = 64
     upsample_train = BicubicUpsampling(80)
     upsample_val = BicubicUpsampling(img_size)
-    rand_aug = transforms.RandAugment(magnitude=9)
+    rand_aug = transforms.RandAugment(num_ops=5, magnitude=10)
     rand_rot = transforms.RandomRotation(degrees=(-25, 25))
     rand_crop = transforms.RandomCrop(size=img_size)
     hflip = transforms.RandomHorizontalFlip(p=0.5)
     to_tensor = transforms.ToTensor()
     normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    rand_erase = transforms.RandomErasing(p=0.2, scale=(0.02, 0.2))
+    rand_erase = transforms.RandomErasing(p=0.3, scale=(0.02, 0.25))
     # compose transformation
     trfs_train = transforms.Compose([upsample_train, rand_rot, rand_crop, hflip, rand_aug, to_tensor, normalize, rand_erase])
     trfs_val = transforms.Compose([upsample_val, to_tensor, normalize])
@@ -126,7 +127,7 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0.0001)
     loss = nn.CrossEntropyLoss(label_smoothing=0.1)
-    epochs = 100
+    epochs = 300
     train_loader = data.DataLoader(train, batch_size=128, shuffle=True, num_workers=12)
 
     val_loader = data.DataLoader(val, batch_size=128, shuffle=True, num_workers=12)
