@@ -4,7 +4,7 @@ import PIL
 import matplotlib.pyplot as plt
 from torchvision.datasets import ImageFolder
 from torchvision import transforms
-#import torchvision.models as models
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
