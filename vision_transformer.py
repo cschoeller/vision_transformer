@@ -25,6 +25,7 @@ def to_pair(x):
     if type(x) == tuple:
         return x
     return (x,x)
+    
 class MLP(nn.Module):
     def __init__(self, dim, hidden_dim):
         super().__init__()
@@ -162,37 +163,3 @@ class VisionTransformer(nn.Module):
         #     fig.add_subplot(rows, columns, i+1)
         #     plt.imshow(img)
         # plt.show()
-
-
-
-
-
-#x = torch.rand(2,5,64)
-#tr = TransformerEncoder(64, 8, 256, 384)
-#print(x.shape)
-#x = tr(x)
-#print(x.shape)
-
-
-
-# dataset_path = Path("./tiny-imagenet-200")
-# train, val = load_dataset(dataset_path)
-
-# x, y = train[0]
-# print(x)
-# print(x.shape)
-
-# perm = nn.Permute(1, 2, 0)
-# x = perm(x)
-# plt.imshow(x)
-# plt.show()
-#print(im)
-#x.unfold(0,4,4).unfold(1,4,4)
-
-# model = VisionTransformer(128, 16)
-
-# data_loader = data.DataLoader(train, batch_size=8, shuffle=True)
-# for batch in data_loader:
-#     x, y = batch
-#     y = model(x)
-#     exit()
