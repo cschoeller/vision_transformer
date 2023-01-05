@@ -2,7 +2,7 @@ import os
 
 import PIL
 import matplotlib.pyplot as plt
-from torchvision.datasets import ImageFolder
+from torchvision.datasets import ImageFolder, CIFAR10
 from torchvision import transforms
 
 import torch
@@ -44,7 +44,7 @@ class BicubicUpsampling():
     def __call__(self, img):
         return img.resize((self.size, self.size), PIL.Image.Resampling.BICUBIC)
 
-def load_dataset(path):
+def get_transforms():
     # normalization from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
     # define augmentations
     #TODO: Add MixUp or CutMix
@@ -61,10 +61,22 @@ def load_dataset(path):
     # compose transformation
     trfs_train = transforms.Compose([upsample_train, rand_rot, rand_crop, hflip, rand_aug, to_tensor, normalize, rand_erase])
     trfs_val = transforms.Compose([upsample_val, to_tensor, normalize])
+    return trfs_train, trfs_val
+
+def load_dataset(path):
+    trfs_train, trfs_val = get_transforms()
     # load images with transformation function
     train = ImageFolder(os.path.join(path, 'train'), transform=trfs_train)
     val = ImageFolder(os.path.join(path, 'val'), transform=trfs_val)
     return train, val
+
+def load_pretrain_dataset():
+    print("Loading CIFAR10:")
+    _, trfs_val = get_transforms()
+    dataset = CIFAR10(".", train=True, transform=trfs_val, download=True)
+    if os.path.exists("./cifar-10-python.tar.gz"):
+        os.remove("./cifar-10-python.tar.gz")
+    return dataset
 
 def plot_history(history_recorder, experiment):#, testset_name=None):
     for key in history_recorder.history.keys():
@@ -115,7 +127,9 @@ def prepare_val_folder(dataset_path):
         os.rmdir(img_dir)
 
 def main():
-    experiment = Experiment(experiment_name='vit')
+    #pretrain_dataset = load_pretrain_dataset()
+
+    experiment = Experiment(experiment_name='patch-swap-vit')
     experiment.add_directory('models')
 
     dataset_path = "./tiny-imagenet-200"
