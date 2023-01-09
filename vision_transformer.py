@@ -95,11 +95,11 @@ class VisionTransformer(nn.Module):
     def __init__(self, img_size, patch_size, num_classes, dim=256, depth=12, heads=12, mlp_dim=256,
                      channels=3, num_convs=0, droprate=0.):
         super().__init__()
-        img_height, img_width = to_pair(img_size)
+        self.img_height, self.img_width = to_pair(img_size)
         self.patch_height, self.patch_width  = to_pair(patch_size)
-        features_height, features_width = img_height//(2**num_convs), img_width//(2**num_convs)
+        features_height, features_width = self.img_height//(2**num_convs), self.img_width//(2**num_convs)
         self.num_patches = features_height//self.patch_height * features_width//self.patch_width
-        assert img_width%self.patch_width == 0 and img_height%self.patch_height == 0
+        assert self.img_width%self.patch_width == 0 and self.img_height%self.patch_height == 0
 
         # define layers
         conv_layers = [nn.Identity()]
@@ -130,8 +130,10 @@ class VisionTransformer(nn.Module):
         x = self.convs(x)
         bs, ch, _, _ = x.shape
         ph, pw, np = self.patch_height, self.patch_width, self.num_patches
-        patches = x.unfold(2,ph,pw).unfold(3,ph,pw)
-        patches = patches.reshape(bs,ch,np,ph,pw)
+        #patches = x.unfold(2,ph,pw).unfold(3,ph,pw)
+        patches = x.unfold(2,ph,ph).unfold(3,pw,pw)
+        #patches = patches.reshape(bs,ch,np,ph,pw)
+        patches = patches.contiguous().view(bs,ch,np,ph,pw)
         patches = patches.permute(0,2,3,4,1)
         return patches
 
