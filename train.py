@@ -19,14 +19,14 @@ from pycandle.training.callbacks import HistoryRecorder, ModelCheckpoint
 from pycandle.general.utils import load_model
 
 from vision_transformer import VisionTransformer
-from patch_swap_vit import PatchSwapVit
+from autoencoding_vision_transformer import AutoencodingVit
 
 
 @dataclass
 class Config:
     # pre-training
     pre_lr = 0.0003
-    pre_epochs = 30
+    pre_epochs = 15
     pre_batch_size = 64
     pre_masking_p = 0.2
 
@@ -69,7 +69,6 @@ class BicubicUpsampling():
 def get_train_transforms():
     # normalization from https://discuss.pytorch.org/t/data-preprocessing-for-tiny-imagenet/27793
     # define augmentations
-    #TODO: Add MixUp or CutMix
     upsample_train = BicubicUpsampling(_CONFIG.pre_crop_size)
     upsample_val = BicubicUpsampling(_CONFIG.img_size)
     rand_aug = transforms.RandAugment(num_ops=5, magnitude=10)
@@ -79,7 +78,6 @@ def get_train_transforms():
     to_tensor = transforms.ToTensor()
     normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     rand_erase = transforms.RandomErasing(p=0.3, scale=(0.02, 0.25))
-    # compose transformation
     trfs_train = transforms.Compose([upsample_train, rand_rot, rand_crop, hflip, rand_aug, to_tensor, normalize, rand_erase])
     trfs_val = transforms.Compose([upsample_val, to_tensor, normalize])
     return trfs_train, trfs_val
@@ -109,7 +107,7 @@ def load_pretrain_dataset():
         os.remove("./cifar-10-python.tar.gz")
     return train, val
 
-def plot_history(history_recorder, output_path):#, testset_name=None):
+def plot_history(history_recorder, output_path):
     for key in history_recorder.history.keys():
         if 'lr' in key:
             continue
@@ -131,7 +129,7 @@ def plot_history(history_recorder, output_path):#, testset_name=None):
 def prepare_val_folder(dataset_path):
     """
     Split validation images into separate class-specific sub folders. Like this the
-    validation dataset can be loaded as an ImageFolder.
+    TinyImagenet validation set can be loaded as a torchvision ImageFolder.
     """
     val_dir = os.path.join(dataset_path, 'val')
     img_dir = os.path.join(val_dir, 'images')
@@ -162,14 +160,13 @@ def reconstruction_loss(batch, model):
     bs, num_patches = x.shape[0], model.num_patches
     patch_mask = (torch.rand(size=(bs, num_patches)) < _CONFIG.pre_masking_p)
     y_pred = model(x, patch_mask)
-    error = ((x - y_pred)**2).mean() # loss = nn.MSELoss()
+    error = ((x - y_pred)**2).mean() # MSE
     return error, y_pred
 
 def plot_reconstruction_examples(model, val, experiment):
     experiment.add_directory('reconstructions')
     mean = torch.Tensor([0.4914, 0.4822, 0.4465]).view(1,1,-1).cuda()
     std = torch.Tensor([0.247, 0.243, 0.261]).view(1,1,-1).cuda()
-
     model.cuda()
     with torch.no_grad():
         for i in random.sample(list(range(len(val))), 30):
@@ -189,6 +186,13 @@ def plot_reconstruction_examples(model, val, experiment):
             plt.close()
 
 def pretrain_vit(model, experiment):
+    """
+    Pretrain the vit self-supervised as a patch-wise autoencoder. Apply a input patch masking to incentivize the
+    model to learn generalizing patterns, enable information flow between patch encodings in the
+    attention layers, and regularize it.
+    NOTE: According to the vit authors supervised pre-training (classification) works better. But self-supervised
+    pre-training is more universally applicable and hence was more interesting to explore.
+    """
     print("Run pretraining")
     model.enable_pretrain(True)
     train, val = load_pretrain_dataset()
@@ -209,11 +213,12 @@ def pretrain_vit(model, experiment):
     experiment.add_directory('pretrain_plots')
     plot_history(history_recorder, experiment.pretrain_plots)
 
-    # load best performing model version
+    # load best performing checkkpoint
     load_model(model, experiment.models + "/" +model_checkpoint_name)
     plot_reconstruction_examples(model, val, experiment)
 
 def train_vit(model, experiment, train, val):
+    """ Train the vit to classify TinyImagenet. """
     # define training setting
     model.enable_pretrain(False)
     optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.train_lr, weight_decay=0.0002)
@@ -231,6 +236,9 @@ def train_vit(model, experiment, train, val):
     trainer.start_training()
     plot_history(history_recorder, experiment.plots)
 
+    # load best performing checkkpoint
+    load_model(model, experiment.models + '/model_checkpoint.pt')
+
 @click.command()
 @click.option('--name', default='test')
 @click.option('--pretrain/--no-pretrain', default=True)
@@ -240,13 +248,11 @@ def main(name, pretrain):
     experiment.add_directory('models')
 
     # model
-    model = PatchSwapVit(img_size=64, patch_size=8, num_classes=200, dim=512, depth=12, heads=12, mlp_dim=512)
+    model = AutoencodingVit(img_size=64, patch_size=8, num_classes=200, dim=512, depth=12, heads=12, mlp_dim=512)
     model.cuda()
     model.train()
 
-    # self-supervised pre-training on CIFAR10 if active
-    # NOTE: According to the vit authors supervised pre-training works better. But self-supervised
-    # pre-training is more universally applicable and hence more interesting to explore.
+    # self-supervised pre-training on CIFAR10
     if pretrain:
         pretrain_vit(model, experiment)
 
@@ -257,7 +263,6 @@ def main(name, pretrain):
     train_vit(model, experiment, train, val)
 
     # evaluate model
-    load_model(model, experiment.models + '/model_checkpoint.pt')
     accuracy = evaluate(model, val)
     print(f"Best validation accuracy: {accuracy}")
 

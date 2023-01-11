@@ -12,6 +12,7 @@ def is_power_of_two(x):
     return (x != 0) and (x & (x - 1)) == 0
 
 class TokenDecoder(nn.Module):
+    """ Convolutional decoder that transforms patch embeddings back to images. """
 
     def __init__(self, dim_in, patch_size, num_patches, channels=3):
         super().__init__()
@@ -23,7 +24,6 @@ class TokenDecoder(nn.Module):
             next_ch = last_ch//2
             if i == (num_layers - 1) or next_ch <= channels:
                 next_ch = channels
-            #print(f"from {last_ch} channels to {next_ch}")
             ups = nn.Upsample(scale_factor=2., mode='bicubic')
             conv = nn.Conv2d(last_ch, next_ch, kernel_size=5, stride=1, padding='same')
             layers.extend([ups, conv])
@@ -31,13 +31,12 @@ class TokenDecoder(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x.view(-1, x.shape[-1], 1, 1) # flatten num patches
+        x = x.view(-1, x.shape[-1], 1, 1) # flatten all image patches
         x = self.net(x)
-        x = x.view(-1, self.num_patches, *x.shape[1:]) # unflatten num patches
+        x = x.view(-1, self.num_patches, *x.shape[1:]) # unflatten per image
         return x
 
-
-class PatchSwapVit(VisionTransformer):
+class AutoencodingVit(VisionTransformer):
     """
     Implements a vision transformer that allows self-supervised pre-training by reconstructing swapped
     patches. This should incentivize the learning of meaningful filters and information flow between tokens.
@@ -49,20 +48,17 @@ class PatchSwapVit(VisionTransformer):
                          heads, mlp_dim,channels, num_convs=0, droprate=0.)
         # only accept quadratic patches with a size to the power of two
         assert(self.patch_height == self.patch_width and is_power_of_two(self.patch_height))
+        self.ps = patch_size
         self.pretrain = False # pretraining mode
-
-        #self.half_pos_embedding = nn.Parameter(torch.zeros(self.num_patches, dim//2, requires_grad=True))
         self.token_decoder = TokenDecoder(dim, self.patch_height, self.num_patches)
 
     def enable_pretrain(self, status):
         self.pretrain = status
 
     def _stitch_patches(self, patches):
-        bs, np, ph, pw, _ = patches.shape
-        patches = patches.permute(0,4,2,3,1)
-        patches = patches.reshape(bs, -1, np)
+        patches = patches.view(patches.shape[0], -1, self.num_patches)
         img = F.fold(patches, (self.img_height, self.img_width),
-                     kernel_size=(ph, pw), stride=(ph,pw))
+                     kernel_size=(self.ps, self.ps), stride=(self.ps, self.ps))
         return img
         
     def forward(self, x, patch_mask=None):
@@ -72,13 +68,6 @@ class PatchSwapVit(VisionTransformer):
 
     def _forward_decoder(self, x, patch_mask):
         patches = self._to_patches(x)      
-
-        # patches[patch_mask] = 0.
-        # imgs = self._stitch_patches(patches)
-        # for img in imgs:
-        #     plt.imshow(img.permute(1,2,0).cpu())
-        #     plt.show()
-
         patches_flat = torch.flatten(patches, start_dim=2)
 
         if patch_mask != None: # mask out patches
@@ -90,7 +79,7 @@ class PatchSwapVit(VisionTransformer):
 
         # decode patches
         decoded_patches = self.token_decoder(z)
-        decoded_patches = decoded_patches.permute(0,1,3,4,2)
+        decoded_patches = decoded_patches.permute(0,2,3,4,1)
 
         # reassemble image
         img = self._stitch_patches(decoded_patches)
