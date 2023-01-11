@@ -5,9 +5,8 @@ Implementation of the Vision Transformer from the paper:
 
 To use this repository, first execute the `download_tinyimagenet.sh` and the `install_pycandle.sh` scripts before running `train.py`.
 
-Currently we achieve an top-1 accuracy of about 37%. However, in the checkpoint I save the model with he lowest validation loss.
-Curiously, this is not necessarily the model with the best validation accuracy (~33%). Probably this happens because at later training stages the
-model becomes more confident about certain samples that lead to better thresholded accuracy, but worse overall validation loss (at the tail end, after the [double descent](https://openai.com/blog/deep-double-descent/)).
+### Results
 
-The next improvement I want to try is pre-training the model self-supervised on a different dataset. Another way to improve it further
-could be the use of more advanced augmentations, like MixUp or CutMix.
+Currently the we achieve a top-1 accuracy of 39.9%, after self-supervised pretraining for 15 epochs on CIFAR10. In this pretraining we use our model to decode patch embeddings to reconstruct the original image. We randomly mask out patches of the input image that our model has to reconstruct in the decoding process. This incentivizes it to learn generalizing patterns and it regulariizes the pretraining. Without pretraining the model achieves about 38% accuracy.
+
+Further improvements would be to test supervised pretraining that is supposed to be superior compared to the self-supervised regime. And additional data augmentation strategies such as MixUp and CutMix could be used.
