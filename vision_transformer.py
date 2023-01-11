@@ -2,10 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-# from train import load_dataset
-# from pathlib import Path
-# import matplotlib.pyplot as plt
-# import torch.utils.data as data
 
 class ResidualLayer(nn.Module):
 
@@ -87,9 +83,8 @@ class TransformerEncoder(nn.Module):
 
 class VisionTransformer(nn.Module):
     """
-    Hybrid Vision Transformer using residual conv layers for initial feature extraction.
-    This adds locality bias to the model and enables training on smaller datasets. Note that
-    the patch size is applied to the post-conv feature maps.
+    Hybrid Vision Transformer (Dosovitskiy et al., 2021). With num_convs set to zero
+    it becomes a regular vison transformer.
     """
 
     def __init__(self, img_size, patch_size, num_classes, dim=256, depth=12, heads=12, mlp_dim=256,
@@ -130,9 +125,7 @@ class VisionTransformer(nn.Module):
         x = self.convs(x)
         bs, ch, _, _ = x.shape
         ph, pw, np = self.patch_height, self.patch_width, self.num_patches
-        #patches = x.unfold(2,ph,pw).unfold(3,ph,pw)
         patches = x.unfold(2,ph,ph).unfold(3,pw,pw)
-        #patches = patches.reshape(bs,ch,np,ph,pw)
         patches = patches.contiguous().view(bs,ch,np,ph,pw)
         patches = patches.permute(0,2,3,4,1)
         return patches
@@ -151,17 +144,3 @@ class VisionTransformer(nn.Module):
         z = self.transformer_encoders(z)
         ct_drop = self.dropout(z[:,0])
         return self.prediction_head(ct_drop)
-
-        # img = x.permute(0, 2, 3, 1)[0]
-        # plt.imshow(img)
-        # plt.show()
-
-        # x = patches[0]
-        # fig = plt.figure(figsize=(8, 8))
-        # plt.axis('off')
-        # columns, rows = 8, 8
-        # for i in range(0, columns*rows):
-        #     img = x[i]
-        #     fig.add_subplot(rows, columns, i+1)
-        #     plt.imshow(img)
-        # plt.show()
