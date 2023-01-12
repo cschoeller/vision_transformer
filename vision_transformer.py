@@ -83,8 +83,9 @@ class TransformerEncoder(nn.Module):
 
 class VisionTransformer(nn.Module):
     """
-    Hybrid Vision Transformer (Dosovitskiy et al., 2021). With num_convs set to zero
-    it becomes a regular vison transformer.
+    Vision Transformer from the paper 'An Image is Worth 16x16 Words: Transformers for Image Recognition
+    at Scale', Dosovitskiy et al., 2021. The implemented model is a hybrid version if convs are neabled.
+    With num_convs=0 and droprate=0 it becomes a regular ViT.
     """
 
     def __init__(self, img_size, patch_size, num_classes, dim=256, depth=12, heads=12, mlp_dim=256,

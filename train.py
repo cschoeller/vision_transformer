@@ -19,6 +19,7 @@ from pycandle.training.callbacks import HistoryRecorder, ModelCheckpoint
 from pycandle.general.utils import load_model
 
 from vision_transformer import VisionTransformer
+from convnext import ConvNext
 from autoencoding_vision_transformer import AutoencodingVit
 
 
@@ -29,11 +30,13 @@ class Config:
     pre_epochs = 15
     pre_batch_size = 64
     pre_masking_p = 0.2
+    pre_wdecay = 0.05
 
     # training
     train_lr = 0.0003
     train_epochs = 300
     train_batch_size = 128
+    wdecay = 0.05
 
     # augmentations
     img_size = 64
@@ -198,7 +201,7 @@ def pretrain_vit(model, experiment):
     train, val = load_pretrain_dataset()
 
     # define training setting
-    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.pre_lr, weight_decay=0.05)
+    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.pre_lr, weight_decay=_CONFIG.pre_wdecay)
     train_loader = data.DataLoader(train, batch_size=_CONFIG.pre_batch_size, shuffle=True, num_workers=12)
     val_loader = data.DataLoader(val, batch_size=_CONFIG.pre_batch_size, shuffle=True, num_workers=12)
 
@@ -216,12 +219,12 @@ def pretrain_vit(model, experiment):
     # load best performing checkkpoint
     load_model(model, experiment.models + "/" +model_checkpoint_name)
     plot_reconstruction_examples(model, val, experiment)
+    model.enable_pretrain(False)
 
 def train_vit(model, experiment, train, val):
     """ Train the vit to classify TinyImagenet. """
     # define training setting
-    model.enable_pretrain(False)
-    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.train_lr, weight_decay=0.05)
+    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.train_lr, weight_decay=_CONFIG.wdecay)
     loss = nn.CrossEntropyLoss(label_smoothing=0.1)
     train_loader = data.DataLoader(train, batch_size=_CONFIG.train_batch_size, shuffle=True, num_workers=12)
     val_loader = data.DataLoader(val, batch_size=_CONFIG.train_batch_size, shuffle=True, num_workers=12)
@@ -243,13 +246,21 @@ def train_vit(model, experiment, train, val):
 @click.option('--name', default='test')
 @click.option('--load-pretrained', 'pretrained_path')
 @click.option('--pretrain/--no-pretrain', default=True)
-def main(name, pretrained_path, pretrain):
+@click.option('--use-convnext/--no--convnext', default=False)
+def main(name, pretrained_path, pretrain, use_convnext):
     # create experiment
     experiment = Experiment(experiment_name=name)
     experiment.add_directory('models')
 
     # model
-    model = AutoencodingVit(img_size=64, patch_size=8, num_classes=200, dim=512, depth=12, heads=12, mlp_dim=512)
+    if use_convnext:
+        model = ConvNext(img_size=_CONFIG.img_size, num_classes=200, blocks=(3,6,3),
+                         channels=(96, 192, 384))
+        pretrain = False
+        _CONFIG.wdecay = 0.
+    else:
+        model = AutoencodingVit(img_size=_CONFIG.img_size, patch_size=8, num_classes=200,
+                                 dim=512, depth=12, heads=12, mlp_dim=512)
     model.cuda()
     model.train()
 
