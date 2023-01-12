@@ -198,7 +198,7 @@ def pretrain_vit(model, experiment):
     train, val = load_pretrain_dataset()
 
     # define training setting
-    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.pre_lr, weight_decay=0.0002)
+    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.pre_lr, weight_decay=0.05)
     train_loader = data.DataLoader(train, batch_size=_CONFIG.pre_batch_size, shuffle=True, num_workers=12)
     val_loader = data.DataLoader(val, batch_size=_CONFIG.pre_batch_size, shuffle=True, num_workers=12)
 
@@ -221,7 +221,7 @@ def train_vit(model, experiment, train, val):
     """ Train the vit to classify TinyImagenet. """
     # define training setting
     model.enable_pretrain(False)
-    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.train_lr, weight_decay=0.0002)
+    optimizer = optim.AdamW(model.parameters(), lr=_CONFIG.train_lr, weight_decay=0.05)
     loss = nn.CrossEntropyLoss(label_smoothing=0.1)
     train_loader = data.DataLoader(train, batch_size=_CONFIG.train_batch_size, shuffle=True, num_workers=12)
     val_loader = data.DataLoader(val, batch_size=_CONFIG.train_batch_size, shuffle=True, num_workers=12)
@@ -241,8 +241,9 @@ def train_vit(model, experiment, train, val):
 
 @click.command()
 @click.option('--name', default='test')
+@click.option('--load-pretrained', 'pretrained_path')
 @click.option('--pretrain/--no-pretrain', default=True)
-def main(name, pretrain):
+def main(name, pretrained_path, pretrain):
     # create experiment
     experiment = Experiment(experiment_name=name)
     experiment.add_directory('models')
@@ -253,7 +254,9 @@ def main(name, pretrain):
     model.train()
 
     # self-supervised pre-training on CIFAR10
-    if pretrain:
+    if pretrained_path:
+        load_model(model, pretrained_path)
+    elif pretrain:
         pretrain_vit(model, experiment)
 
     # load target dataset

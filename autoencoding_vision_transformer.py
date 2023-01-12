@@ -26,8 +26,9 @@ class TokenDecoder(nn.Module):
                 next_ch = channels
             ups = nn.Upsample(scale_factor=2., mode='bicubic')
             conv = nn.Conv2d(last_ch, next_ch, kernel_size=5, stride=1, padding='same')
-            layers.extend([ups, conv])
+            layers.extend([ups, conv, nn.GELU()])
             last_ch = next_ch
+        layers.pop() # remove last activation
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
