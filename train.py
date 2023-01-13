@@ -257,7 +257,6 @@ def main(name, pretrained_path, pretrain, use_convnext):
         model = ConvNext(img_size=_CONFIG.img_size, num_classes=200, blocks=(3,6,3),
                          channels=(96, 192, 384))
         pretrain = False
-        _CONFIG.wdecay = 0.
     else:
         model = AutoencodingVit(img_size=_CONFIG.img_size, patch_size=8, num_classes=200,
                                  dim=512, depth=12, heads=12, mlp_dim=512)
